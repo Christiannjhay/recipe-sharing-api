@@ -27,8 +27,6 @@ def create_connection(conn=None, cursor=None):
 
 conn, cursor = create_connection()
 
-
-# Use the logging module to add a log statement
 try:
     print("Successfully connected to the database.")
 except pyodbc.Error as e:
@@ -46,28 +44,57 @@ cursor.execute("USE recipe_sharing")
 
 # Create 'Recipes' table if it doesn't exist
 try:
-    cursor.execute("IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Recipes') CREATE TABLE Recipes (recipe_id INT IDENTITY(1,1) PRIMARY KEY, name VARCHAR(50) NOT NULL, ingredients TEXT, steps TEXT, preparation_time INT)")
+    cursor.execute("""IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Recipes') 
+                        CREATE TABLE Recipes (
+                            recipe_id INT IDENTITY(1,1) PRIMARY KEY,
+                            user_id INT,
+                            name VARCHAR(50) NOT NULL, 
+                            ingredients TEXT NOT NULL, 
+                            steps TEXT NOT NULL, 
+                            preparation_time INT NOT NULL,
+                            FOREIGN KEY (user_id) REFERENCES Users(user_id)
+                   )""")
     print("Successfully created 'Recipes' table.")
 except pyodbc.Error as e:
     print("Error creating 'Recipes' table: %s" % str(e))
 
 # Create 'Comments' table if it doesn't exist
 try:
-    cursor.execute("IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Comments') CREATE TABLE Comments (id INT IDENTITY(1,1) PRIMARY KEY, recipe_id INT, comment_text TEXT, FOREIGN KEY (recipe_id) REFERENCES Recipes(recipe_id))")
+    cursor.execute("""IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Comments') 
+                        CREATE TABLE Comments (
+                            id INT IDENTITY(1,1) PRIMARY KEY, 
+                            recipe_id INT,
+                            user_id INT,
+                            comment_text TEXT NOT NULL, 
+                            FOREIGN KEY (recipe_id) REFERENCES Recipes(recipe_id),
+                            FOREIGN KEY (user_id) REFERENCES Users(user_id)
+                   )""")
     print("Successfully created 'Comments' table.")
 except pyodbc.Error as e:
     print("Error creating 'Comments' table: %s" % str(e))
 
 # Create 'Ratings' table if it doesn't exist
 try:
-    cursor.execute("IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Ratings') CREATE TABLE Ratings (id INT IDENTITY(1,1) PRIMARY KEY, recipe_id INT, rating_value INT, FOREIGN KEY (recipe_id) REFERENCES Recipes(recipe_id))")
+    cursor.execute("""IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Ratings') 
+                        CREATE TABLE Ratings (
+                            id INT IDENTITY(1,1) PRIMARY KEY, 
+                            recipe_id INT, 
+                            user_id INT,
+                            rating_value INT,
+                            FOREIGN KEY (recipe_id) REFERENCES Recipes(recipe_id),
+                            FOREIGN KEY (user_id) REFERENCES Users(user_id)
+                   )""")
     print("Successfully created 'Ratings' table.")
 except pyodbc.Error as e:
     print("Error creating 'Ratings' table: %s" % str(e))
 
 # Create 'Users' table if it doesn't exist
 try:
-    cursor.execute("IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Users') CREATE TABLE Users (user_id INT IDENTITY(1,1) PRIMARY KEY, username VARCHAR(50) NOT NULL UNIQUE, password_hash VARCHAR(255) NOT NULL)")
+    cursor.execute("""IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Users') 
+                        CREATE TABLE Users (
+                            user_id INT IDENTITY(1,1) PRIMARY KEY, 
+                            username VARCHAR(50) NOT NULL UNIQUE, 
+                            password_hash VARCHAR(255) NOT NULL)""")
     print("Successfully created 'Users' table.")
 except pyodbc.Error as e:
     print("Error creating 'Users' table: %s" % str(e))
@@ -110,13 +137,13 @@ def suggest_recipes():
     if not user_ingredients:
         return jsonify({"message": "Please provide a list of ingredients"}), 400
 
-    # Get all recipes
+   
     cursor.execute("SELECT * FROM Recipes")
     recipes = cursor.fetchall()
 
     suggested_recipes = []
 
-    # Loop through recipes and check if at least one provided ingredient is in the recipe's ingredients
+    
     for recipe in recipes:
         recipe_ingredients = recipe.ingredients.lower() 
         match = any(ingredient.lower() in recipe_ingredients for ingredient in user_ingredients)
