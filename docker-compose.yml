@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    environment:
+      SA_PASSWORD: YourStrong@Passw0rd
+      ACCEPT_EULA: Y
+    ports:
+      - "14500:1433"
+    networks:
+      - final_default
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: '4'
+
+  app:
+    build: .
+    ports:
+      - "5000:5000"
+    depends_on:
+      - sqlserver
+    networks:
+      - final_default
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: '4'
+
+networks:
+  final_default:
+    external: true
