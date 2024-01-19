@@ -1,0 +1,78 @@
+import os
+import jwt
+from flask import Flask, request, jsonify
+from werkzeug.security import generate_password_hash, check_password_hash
+import pyodbc
+
+app = Flask(__name__)
+
+# Secret key for encoding and decoding JWT tokens
+SECRET_KEY = 'your-secret-key'
+
+def create_connection():
+    # SQL Server connection config
+    server = os.environ.get('DB_SERVER', 'sqlserver')
+    database = os.environ.get('DB_DATABASE', 'master')
+    username = os.environ.get('DB_USERNAME', 'SA')
+    password = os.environ.get('DB_PASSWORD', 'YourStrong@Passw0rd')
+    port = int(os.environ.get('DB_PORT', 14500))
+
+    # Initialize cursor globally
+    conn = pyodbc.connect(f'DRIVER=ODBC Driver 17 for SQL Server; SERVER={server};DATABASE={database};UID={username};PWD={password};PORT={port}', autocommit=True)
+    cursor = conn.cursor()
+    return conn, cursor
+
+conn, cursor = create_connection()
+
+# ... (rest of your database setup code) ...
+
+# Create 'Users' table if it doesn't exist
+try:
+    cursor.execute("IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Users') CREATE TABLE Users (user_id INT IDENTITY(1,1) PRIMARY KEY, username VARCHAR(50) NOT NULL UNIQUE, password_hash VARCHAR(255) NOT NULL)")
+    print("Successfully created 'Users' table.")
+except pyodbc.Error as e:
+    print("Error creating 'Users' table: %s" % str(e))
+
+@app.route('/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    username = data['username']
+    password = data['password']
+
+    hashed_password = generate_password_hash(password)
+
+    try:
+        cursor.execute("INSERT INTO Users (username, password_hash) VALUES (?, ?)", (username, hashed_password))
+        conn.commit()
+        return jsonify({'message': 'Registration successful'}), 201
+    except pyodbc.Error as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    username = data['username']
+    password = data['password']
+
+    cursor.execute("SELECT * FROM Users WHERE username=?", (username,))
+    user_record = cursor.fetchone()
+
+    if user_record and check_password_hash(user_record.password_hash, password):
+        token = jwt.encode({'user_id': user_record.user_id}, SECRET_KEY, algorithm='HS256')
+        return jsonify({'token': token}), 200
+    else:
+        return jsonify({'message': 'Invalid username or password'}), 401
+
+# ... (rest of your API endpoints) ...
+
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0')
+
+
+Make sure to replace 'your-secret-key' with a strong, unique key that only you know. This key will be used to sign and verify JWT tokens.
+
+The /register endpoint will take a username and password, hash the password for security, and store it in the Users table.
+
+The /login endpoint will authenticate the user by checking the provided password against the stored hash. If authentication is successful, it returns a JWT token that the client can use to authenticate further requests.
+
+Remember to handle errors and edge cases appropriately in your production code for better security and reliability.

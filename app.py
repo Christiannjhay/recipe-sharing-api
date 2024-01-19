@@ -1,21 +1,28 @@
 import os
 from flask import Flask, request, jsonify
 import pyodbc
+import jwt
+from werkzeug.security import generate_password_hash, check_password_hash
+
 
 app = Flask(__name__)
 
-def create_connection():
-    # SQL Server connection config
-    server = os.environ.get('DB_SERVER', 'sqlserver')
-    database = os.environ.get('DB_DATABASE', 'master')
-    username = os.environ.get('DB_USERNAME', 'SA')
-    password = os.environ.get('DB_PASSWORD', 'YourStrong@Passw0rd')
-    port = int(os.environ.get('DB_PORT', 14500))
+# Secret key for encoding and decoding JWT tokens
+SECRET_KEY = 'YourStrong@Passw0rd'
 
-    # Initialize cursor globally
-    conn = pyodbc.connect(f'DRIVER=ODBC Driver 17 for SQL Server; SERVER={server};DATABASE={database};UID={username};PWD={password};PORT={port}', autocommit=True)
-    cursor = conn.cursor()
+def create_connection(conn=None, cursor=None):
+    if conn is None or cursor is None:
+        # SQL Server connection config
+        server = os.environ.get('DB_SERVER', 'sqlserver')
+        database = os.environ.get('DB_DATABASE', 'master')
+        username = os.environ.get('DB_USERNAME', 'SA')
+        password = os.environ.get('DB_PASSWORD', 'YourStrong@Passw0rd')
+        port = int(os.environ.get('DB_PORT', 14500))
 
+        # Initialize cursor globally
+        conn = pyodbc.connect(f'DRIVER=ODBC Driver 17 for SQL Server; SERVER={server};DATABASE={database};UID={username};PWD={password};PORT={port}', autocommit=True)
+        cursor = conn.cursor()
+ 
     return conn, cursor
 
 conn, cursor = create_connection()
@@ -58,6 +65,42 @@ try:
 except pyodbc.Error as e:
     print("Error creating 'Ratings' table: %s" % str(e))
 
+# Create 'Users' table if it doesn't exist
+try:
+    cursor.execute("IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Users') CREATE TABLE Users (user_id INT IDENTITY(1,1) PRIMARY KEY, username VARCHAR(50) NOT NULL UNIQUE, password_hash VARCHAR(255) NOT NULL)")
+    print("Successfully created 'Users' table.")
+except pyodbc.Error as e:
+    print("Error creating 'Users' table: %s" % str(e))
+
+@app.route('/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    username = data['username']
+    password = data['password']
+
+    hashed_password = generate_password_hash(password)
+
+    try:
+        cursor.execute("INSERT INTO Users (username, password_hash) VALUES (?, ?)", (username, hashed_password))
+        conn.commit()
+        return jsonify({'message': 'Registration successful'}), 201
+    except pyodbc.Error as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    username = data['username']
+    password = data['password']
+
+    cursor.execute("SELECT * FROM Users WHERE username=?", (username,))
+    user_record = cursor.fetchone()
+
+    if user_record and check_password_hash(user_record.password_hash, password):
+        token = jwt.encode({'user_id': user_record.user_id}, SECRET_KEY, algorithm='HS256')
+        return jsonify({'token': token}), 200
+    else:
+        return jsonify({'message': 'Invalid username or password'}), 401
 
 # API endpoint to suggest recipes based on user-provided ingredients
 @app.route("/recipes/suggest", methods=['POST'])
