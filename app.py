@@ -10,16 +10,17 @@ app = Flask(__name__)
 # Secret key for encoding and decoding JWT tokens
 SECRET_KEY = 'YourStrong@Passw0rd'
 
+ # SQL Server connection config
 def create_connection(conn=None, cursor=None):
     if conn is None or cursor is None:
-        # SQL Server connection config
+        
         server = os.environ.get('DB_SERVER', 'sqlserver')
         database = os.environ.get('DB_DATABASE', 'master')
         username = os.environ.get('DB_USERNAME', 'SA')
         password = os.environ.get('DB_PASSWORD', 'YourStrong@Passw0rd')
         port = int(os.environ.get('DB_PORT', 14500))
 
-        # Initialize cursor globally
+      
         conn = pyodbc.connect(f'DRIVER=ODBC Driver 17 for SQL Server; SERVER={server};DATABASE={database};UID={username};PWD={password};PORT={port}', autocommit=True)
         cursor = conn.cursor()
  
@@ -32,18 +33,18 @@ try:
 except pyodbc.Error as e:
     print("Error connecting to the database: %s" % str(e))
 
-# Create 'recipe_sharing' database if it doesn't exist
+# Create 'recipe_sharing' databas
 try:
     cursor.execute("IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = 'recipe_sharing') CREATE DATABASE recipe_sharing")
     print("Successfully created 'recipe_sharing' database.")
 except pyodbc.Error as e:
     print("Error creating 'recipe_sharing' database: %s" % str(e))
 
-# Use the 'recipe_sharing' database
+
 cursor.execute("USE recipe_sharing")
 
 
-# Create 'Users' table if it doesn't exist
+# Create 'Users' table 
 try:
     cursor.execute("""IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Users') 
                         CREATE TABLE Users (
@@ -53,9 +54,9 @@ try:
     print("Successfully created 'Users' table.")
 except pyodbc.Error as e:
     print("Error creating 'Users' table: %s" % str(e))
-    
-# Create 'Recipes' table if it doesn't exist
-try:
+
+try:   
+# Create 'Recipes' table 
     cursor.execute("""IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Recipes') 
                         CREATE TABLE Recipes (
                             recipe_id INT IDENTITY(1,1) PRIMARY KEY,
@@ -70,7 +71,7 @@ try:
 except pyodbc.Error as e:
     print("Error creating 'Recipes' table: %s" % str(e))
 
-# Create 'Comments' table if it doesn't exist
+# Create 'Comments'
 try:
     cursor.execute("""IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Comments') 
                         CREATE TABLE Comments (
@@ -85,8 +86,8 @@ try:
 except pyodbc.Error as e:
     print("Error creating 'Comments' table: %s" % str(e))
 
-# Create 'Ratings' table if it doesn't exist
 try:
+# Create 'Ratings' 
     cursor.execute("""IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Ratings') 
                         CREATE TABLE Ratings (
                             id INT IDENTITY(1,1) PRIMARY KEY, 
@@ -99,7 +100,7 @@ try:
     print("Successfully created 'Ratings' table.")
 except pyodbc.Error as e:
     print("Error creating 'Ratings' table: %s" % str(e))
-
+    
 
 # Decorator for requiring a token
 def token_required(f):
@@ -111,16 +112,14 @@ def token_required(f):
             return jsonify({'message': 'Token is missing!'}), 401
 
         try:
-            # Assuming the token includes the 'Bearer ' prefix
             if 'Bearer ' in token:
-                token = token.split(' ')[1]  # Get the actual token part
+                token = token.split(' ')[1] 
             data = jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
             current_user_id = data['user_id']
         except jwt.ExpiredSignatureError:
             return jsonify({'message': 'Token has expired!'}), 401
         except jwt.InvalidTokenError as e:
-            # Log or print e here to get the specific reason
-            print(e)  # Or use your preferred logging mechanism
+            print(e)  
             return jsonify({'message': 'Token is invalid!'}), 401
         except Exception as e:
             print(e)
@@ -130,6 +129,7 @@ def token_required(f):
         return f(*args, **kwargs)
     return decorated
 
+# API endpoint for users to register
 @app.route('/register', methods=['POST'])
 def register():
     data = request.get_json()
@@ -145,6 +145,7 @@ def register():
     except pyodbc.Error as e:
         return jsonify({'error': str(e)}), 500
 
+# API endpoint for users to login
 @app.route('/login', methods=['POST'])
 def login():
     data = request.get_json()
