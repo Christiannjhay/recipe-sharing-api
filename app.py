@@ -1,9 +1,9 @@
 import os
-from flask import Flask, request, jsonify
+from flask import Flask, g, request, jsonify
 import pyodbc
 import jwt
 from werkzeug.security import generate_password_hash, check_password_hash
-
+from functools import wraps
 
 app = Flask(__name__)
 
@@ -42,6 +42,18 @@ except pyodbc.Error as e:
 # Use the 'recipe_sharing' database
 cursor.execute("USE recipe_sharing")
 
+
+# Create 'Users' table if it doesn't exist
+try:
+    cursor.execute("""IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Users') 
+                        CREATE TABLE Users (
+                            user_id INT IDENTITY(1,1) PRIMARY KEY, 
+                            username VARCHAR(50) NOT NULL UNIQUE, 
+                            password_hash VARCHAR(255) NOT NULL)""")
+    print("Successfully created 'Users' table.")
+except pyodbc.Error as e:
+    print("Error creating 'Users' table: %s" % str(e))
+    
 # Create 'Recipes' table if it doesn't exist
 try:
     cursor.execute("""IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Recipes') 
@@ -88,16 +100,35 @@ try:
 except pyodbc.Error as e:
     print("Error creating 'Ratings' table: %s" % str(e))
 
-# Create 'Users' table if it doesn't exist
-try:
-    cursor.execute("""IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Users') 
-                        CREATE TABLE Users (
-                            user_id INT IDENTITY(1,1) PRIMARY KEY, 
-                            username VARCHAR(50) NOT NULL UNIQUE, 
-                            password_hash VARCHAR(255) NOT NULL)""")
-    print("Successfully created 'Users' table.")
-except pyodbc.Error as e:
-    print("Error creating 'Users' table: %s" % str(e))
+
+# Decorator for requiring a token
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        print(request.headers)
+        token = request.headers.get('Authorization')
+        if not token:
+            return jsonify({'message': 'Token is missing!'}), 401
+
+        try:
+            # Assuming the token includes the 'Bearer ' prefix
+            if 'Bearer ' in token:
+                token = token.split(' ')[1]  # Get the actual token part
+            data = jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
+            current_user_id = data['user_id']
+        except jwt.ExpiredSignatureError:
+            return jsonify({'message': 'Token has expired!'}), 401
+        except jwt.InvalidTokenError as e:
+            # Log or print e here to get the specific reason
+            print(e)  # Or use your preferred logging mechanism
+            return jsonify({'message': 'Token is invalid!'}), 401
+        except Exception as e:
+            print(e)
+            return jsonify({'message': 'Token could not be verified!'}), 401
+        
+        g.user_id = current_user_id
+        return f(*args, **kwargs)
+    return decorated
 
 @app.route('/register', methods=['POST'])
 def register():
@@ -133,17 +164,13 @@ def login():
 @app.route("/recipes/suggest", methods=['POST'])
 def suggest_recipes():
     user_ingredients = request.json['ingredients']
-
     if not user_ingredients:
         return jsonify({"message": "Please provide a list of ingredients"}), 400
-
-   
+    
     cursor.execute("SELECT * FROM Recipes")
     recipes = cursor.fetchall()
-
     suggested_recipes = []
 
-    
     for recipe in recipes:
         recipe_ingredients = recipe.ingredients.lower() 
         match = any(ingredient.lower() in recipe_ingredients for ingredient in user_ingredients)
@@ -193,6 +220,7 @@ def search_recipes():
 
 # API endpoint to add recipes and get recipes
 @app.route("/recipes", methods=['POST', 'GET'])
+@token_required
 def recipes():
     if request.method == 'POST':
         name = request.json['name']
@@ -201,8 +229,8 @@ def recipes():
         preparation_time = request.json['preparation_time']
 
         cursor.execute(
-            "INSERT INTO Recipes (name, ingredients, steps, preparation_time) VALUES (?, ?, ?, ?)",
-            (name, ingredients, steps, preparation_time))
+            "INSERT INTO Recipes (user_id, name, ingredients, steps, preparation_time) VALUES (?, ?, ?, ?, ?)",
+            (g.user_id, name, ingredients, steps, preparation_time))
         conn.commit()
 
         return jsonify({
@@ -217,7 +245,7 @@ def recipes():
         for recipe in recipes:
             recipe_dict = {
                 'recipe_id': recipe.recipe_id,
-                'name': recipe.name,
+                'name': recipe.name,    
                 'ingredients': recipe.ingredients,
                 'steps': recipe.steps,
                 'preparation_time': recipe.preparation_time
@@ -228,6 +256,7 @@ def recipes():
 
 # API endpoint to update or delete the recipe
 @app.route("/recipes/<int:recipe_id>", methods=['GET', 'PUT', 'DELETE'])
+@token_required
 def recipe(recipe_id):
     if request.method == 'GET':
         cursor.execute("SELECT * FROM Recipes WHERE recipe_id = ?", (recipe_id,))
@@ -252,20 +281,21 @@ def recipe(recipe_id):
         preparation_time = request.json['preparation_time']
 
         cursor.execute(
-            "UPDATE Recipes SET name=?, ingredients=?, steps=?, preparation_time=? WHERE recipe_id=?",
-            (name, ingredients, steps, preparation_time, recipe_id))
+            "UPDATE Recipes SET name=?, ingredients=?, steps=?, preparation_time=? WHERE recipe_id=? AND user_id=?",
+            (name, ingredients, steps, preparation_time, recipe_id, g.user_id))
         conn.commit()
 
         return jsonify({"message": "Recipe updated successfully!"})
 
     elif request.method == 'DELETE':
-        cursor.execute("DELETE FROM Recipes WHERE recipe_id = ?", (recipe_id,))
+        cursor.execute("DELETE FROM Recipes WHERE recipe_id = ? AND user_id=?", (recipe_id, g.user_id))
         conn.commit()
 
         return jsonify({"message": "Recipe deleted successfully!"})
 
 # API endpoint to add ratings to the recipe
 @app.route("/recipes/<int:recipe_id>/ratings", methods=['POST'])
+@token_required
 def add_rating(recipe_id):
     if request.method == 'POST':
         rating_value = request.json['rating_value']
@@ -273,21 +303,24 @@ def add_rating(recipe_id):
         if not (1 <= rating_value <= 5):
             return jsonify({"message": "Invalid rating. Please provide a rating between 1 and 5"}), 400
 
-        cursor.execute("INSERT INTO Ratings (recipe_id, rating_value) VALUES (?, ?)", (recipe_id, rating_value))
+        cursor.execute("INSERT INTO Ratings (user_id, recipe_id, rating_value) VALUES (?, ?, ?)", (g.user_id, recipe_id, rating_value))
         conn.commit()
 
         return jsonify({"message": "Rating added successfully!"})
 
-# API endpoint to add and retrieve comments for the recipe
+# API endpoint to add or retrieve comments for a specific recipe
 @app.route("/recipes/<int:recipe_id>/comments", methods=['POST', 'GET'])
+@token_required
 def recipe_comments(recipe_id):
     if request.method == 'POST':
         comment_text = request.json['comment_text']
 
-        cursor.execute("INSERT INTO Comments (recipe_id, comment_text) VALUES (?, ?)", (recipe_id, comment_text))
-        conn.commit()
-
-        return jsonify({"message": "Comment added successfully!"})
+        try:
+            cursor.execute("INSERT INTO Comments (user_id, recipe_id, comment_text) VALUES (?, ?, ?)", (g.user_id, recipe_id, comment_text))
+            conn.commit()
+            return jsonify({"message": "Comment added successfully!"}), 201
+        except pyodbc.Error as e:
+            return jsonify({'error': str(e)}), 500
 
     elif request.method == 'GET':
         cursor.execute("SELECT * FROM Comments WHERE recipe_id = ?", (recipe_id,))
@@ -297,12 +330,13 @@ def recipe_comments(recipe_id):
         for comment in comments:
             comment_dict = {
                 'id': comment.id,
+                'user_id': comment.user_id,
                 'recipe_id': comment.recipe_id,
                 'comment_text': comment.comment_text
             }
             comment_list.append(comment_dict)
 
-        return jsonify(comment_list)
+        return jsonify(comment_list), 200
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0')
