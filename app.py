@@ -10,23 +10,19 @@ app = Flask(__name__)
 # Secret key for encoding and decoding JWT tokens
 SECRET_KEY = 'YourStrong@Passw0rd'
 
- # SQL Server connection config
-def create_connection(conn=None, cursor=None):
-    if conn is None or cursor is None:
-        
-        server = os.environ.get('DB_SERVER', 'sqlserver')
-        database = os.environ.get('DB_DATABASE', 'master')
-        username = os.environ.get('DB_USERNAME', 'SA')
-        password = os.environ.get('DB_PASSWORD', 'YourStrong@Passw0rd')
-        port = int(os.environ.get('DB_PORT', 14500))
+def create_connection():
+    server = os.environ.get('DB_SERVER', 'sqlserver')
+    database = os.environ.get('DB_DATABASE', 'master')
+    username = os.environ.get('DB_USERNAME', 'SA')
+    password = os.environ.get('DB_PASSWORD', 'YourStrong@Passw0rd')
+    port = int(os.environ.get('DB_PORT', 14500))
 
-      
-        conn = pyodbc.connect(f'DRIVER=ODBC Driver 17 for SQL Server; SERVER={server};DATABASE={database};UID={username};PWD={password};PORT={port}', autocommit=True)
-        cursor = conn.cursor()
- 
+    conn = pyodbc.connect(f'DRIVER=ODBC Driver 17 for SQL Server; SERVER={server};DATABASE={database};UID={username};PWD={password};PORT={port}', autocommit=True)
+    cursor = conn.cursor()
     return conn, cursor
 
 conn, cursor = create_connection()
+
 
 try:
     print("Successfully connected to the database.")
@@ -79,7 +75,7 @@ try:
                             recipe_id INT,
                             user_id INT,
                             comment_text TEXT NOT NULL, 
-                            FOREIGN KEY (recipe_id) REFERENCES Recipes(recipe_id),
+                            FOREIGN KEY (recipe_id) REFERENCES Recipes(recipe_id) ON DELETE CASCADE,
                             FOREIGN KEY (user_id) REFERENCES Users(user_id)
                    )""")
     print("Successfully created 'Comments' table.")
@@ -94,7 +90,7 @@ try:
                             recipe_id INT, 
                             user_id INT,
                             rating_value INT,
-                            FOREIGN KEY (recipe_id) REFERENCES Recipes(recipe_id),
+                            FOREIGN KEY (recipe_id) REFERENCES Recipes(recipe_id) ON DELETE CASCADE,
                             FOREIGN KEY (user_id) REFERENCES Users(user_id)
                    )""")
     print("Successfully created 'Ratings' table.")
@@ -134,9 +130,10 @@ def token_required(f):
 def register():
     data = request.get_json()
     username = data['username']
-    password = data['password']
+    password = data['password_hash']
 
-    hashed_password = generate_password_hash(password)
+
+    hashed_password = generate_password_hash(password)   
 
     try:
         cursor.execute("INSERT INTO Users (username, password_hash) VALUES (?, ?)", (username, hashed_password))

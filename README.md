@@ -17,7 +17,7 @@ This repository contains the implementation of a Recipe Sharing Platform API usi
     ```
 
 3. **Access the API:**
-    Open your browser and navigate to [http://localhost:5000](http://localhost:5000)
+   
 ## API Endpoints
 _**Adjust the URLs and request bodies based on your specific test cases and the response data returned by the server.**_
 - **POST /recipes/:** Add a new recipe.
@@ -42,29 +42,8 @@ _**Adjust the URLs and request bodies based on your specific test cases and the 
   Login: SA
   Password: YourStrong@Passw0rd
   ```
- ## Testing with postman
- **1. Open Postman:** If you don't have Postman installed, you can download it from [Postman's website.](https://www.postman.com/downloads/)
- 
- **2. Create a New Request:**
- - Click on the `New` button to create a new request.
- - Give your request a name, and save it in an appropriate collection.
- 
- **3. Define the Request:**
+ ## Testing 
 
- - Set the request type (GET, POST, PUT, DELETE) based on the endpoint you want to test.
- - Enter the request URL. For example, if you are testing the /recipes endpoint, set the URL to `http://localhost:5000/recipes`
- 
- - Add a new **headers** `key: Content-type` and Value: `application/json`
- - Select the `raw option` and  Enter the JSON data based on your request and press `send`. For example, for adding a recipe:
- 
- ```
- {
-    "name": "Test Recipe",
-    "ingredients": "Ingredient 1, Ingredient 2",
-    "steps": "Step 1, Step 2",
-    "preparation_time": 30
- }
- ```
 
 
 
