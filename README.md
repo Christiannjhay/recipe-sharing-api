@@ -1,4 +1,4 @@
-# Recipe Sharing Platform API V2
+# Recipe Sharing Platform API
 
 ## Overview
 This repository contains the implementation of a Recipe Sharing Platform API using Python and Flask, backed by an MSSQL database. The application is containerized using Docker for easy deployment.
@@ -7,7 +7,7 @@ This repository contains the implementation of a Recipe Sharing Platform API usi
 
 1. **Clone the Repository:**
     ```bash
-    https://github.com/Christiannjhay/Recipe-sharing-api-v2.git
+    https://github.com/Christiannjhay/recipe-sharing-api.git
     cd recipe-sharing-api
     ```
 
