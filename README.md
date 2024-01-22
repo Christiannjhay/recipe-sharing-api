@@ -16,18 +16,12 @@ This repository contains the implementation of a Recipe Sharing Platform API usi
     docker-compose up 
     ```
 
-3. **Access the API:**
-   
-## API Endpoints
-_**Adjust the URLs and request bodies based on your specific test cases and the response data returned by the server.**_
-- **POST /recipes/:** Add a new recipe.
-- **GET /recipes/:** Retrieve a list of all recipes, sorted by most recent.
-- **GET /recipes/{recipe_id}/:** Retrieve details of a specific recipe by its ID.
-- **PUT /recipes/{recipe_id}/:** Update a specific recipe by its ID.
-- **DELETE /recipes/{recipe_id}/:** Delete a specific recipe by its ID.
-- **POST /recipes/{recipe_id}/ratings/:** Rate a specific recipe.
-- **POST /recipes/{recipe_id}/comments/:** Comment on a specific recipe.
-- **GET /recipes/{recipe_id}/comments/:** Retrieve all comments for a specific recipe.
+3. **Run the Unit test**
+   ```bash
+   docker-compose exec app python test.py 
+   ```
+
+
 
 ## Server Management System Login
   **Log in to your server management system:**
